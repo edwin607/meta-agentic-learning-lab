@@ -8,7 +8,7 @@ import fs from 'fs';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const app = express();
-const PORT = 3001;
+const PORT = process.env.PORT || 3001;
 
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 
@@ -35,7 +35,7 @@ async function callOpenRouter(messages, system, options = {}) {
     headers: {
       'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
       'Content-Type': 'application/json',
-      'HTTP-Referer': `http://localhost:${PORT}`,
+      'HTTP-Referer': `${process.env.RENDER_EXTERNAL_URL || `http://localhost:${PORT}`}`,
       'X-Title': 'Meta-Agentic Learning Lab',
     },
     body: JSON.stringify(body),
