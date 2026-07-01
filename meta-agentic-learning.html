@@ -1,0 +1,1077 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Meta-Agentic Learning Lab</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: #0a1628;
+    color: #e0e8f0;
+    font-family: 'Courier New', 'Consolas', 'Monaco', monospace;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    transition: background-color 0.6s ease;
+  }
+
+  /* Agent mode themes — background shifts when different agents activate */
+  body.mode-default { background: #0a1628; }
+  body.mode-reactive { background: #11171d; }
+  body.mode-memory { background: #1a0e2e; }
+  body.mode-skills { background: #2a1020; }
+  body.mode-planning { background: #2a1c0a; }
+  body.mode-tool { background: #0a2816; }
+  body.mode-multi { background: #0e1022; }
+  body.mode-hitl { background: #2a1010; }
+
+  #header {
+    padding: 14px 24px;
+    background: rgba(13, 30, 61, 0.85);
+    backdrop-filter: blur(6px);
+    border-bottom: 1px solid #1a3355;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-shrink: 0;
+    transition: background 0.5s ease, border-color 0.5s ease;
+  }
+  body.mode-memory #header { border-bottom-color: #7c3aed; }
+  body.mode-skills #header { border-bottom-color: #ec4899; }
+  body.mode-planning #header { border-bottom-color: #eab308; }
+  body.mode-tool #header { border-bottom-color: #22c55e; }
+  body.mode-multi #header { border-bottom-color: #8b5cf6; }
+  body.mode-hitl #header { border-bottom-color: #ef4444; }
+
+  #header .robot-icon {
+    font-size: 24px;
+    line-height: 1;
+    transition: transform 0.4s ease;
+  }
+
+  #header .robot-name {
+    color: #5b9cf5;
+    font-weight: bold;
+    font-size: 15px;
+    transition: color 0.5s ease;
+  }
+
+  #header .robot-subtitle {
+    color: #4a6a8a;
+    font-size: 12px;
+    margin-left: auto;
+  }
+
+  #chat {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px 24px;
+    scroll-behavior: smooth;
+  }
+
+  #chat::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  #chat::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  #chat::-webkit-scrollbar-thumb {
+    background: #1a3355;
+    border-radius: 3px;
+  }
+
+  .message {
+    margin-bottom: 16px;
+    opacity: 0;
+    animation: fadeIn 0.3s ease forwards;
+  }
+
+  @keyframes fadeIn {
+    to { opacity: 1; }
+  }
+
+  .message.bot {
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+  }
+
+  .message.bot .avatar {
+    font-size: 28px;
+    line-height: 1.3;
+    flex-shrink: 0;
+    margin-top: 2px;
+  }
+
+  .message.bot .bubble {
+    background: #0d1e3d;
+    border: 1px solid #1a3355;
+    border-radius: 4px 16px 16px 16px;
+    padding: 12px 18px;
+    max-width: 85%;
+    font-size: 14px;
+    line-height: 1.6;
+    color: #c8d8e8;
+    min-height: 1.6em;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    transition: background 0.4s ease, border-color 0.4s ease;
+  }
+
+  /* Agent-specific bubble styles — coloured left border + tinted bg */
+  .bubble.agent-researcher { border-left: 4px solid #5b9cf5 !important; background: rgba(13, 30, 61, 0.9) !important; }
+  .bubble.agent-explainer { border-left: 4px solid #22c55e !important; background: rgba(13, 42, 26, 0.9) !important; color: #d0f0d0 !important; }
+  .bubble.agent-quizmaster { border-left: 4px solid #eab308 !important; background: rgba(42, 38, 13, 0.9) !important; color: #f0f0d0 !important; }
+  .bubble.agent-orchestrator { border-left: 4px solid #8b5cf6 !important; background: rgba(30, 13, 61, 0.9) !important; }
+
+  .message.user {
+    display: flex;
+    justify-content: flex-end;
+    padding-left: 60px;
+  }
+
+  .message.user .bubble {
+    background: #1a3a5c;
+    border: 1px solid #2a5075;
+    border-radius: 16px 4px 16px 16px;
+    padding: 10px 16px;
+    max-width: 70%;
+    font-size: 14px;
+    line-height: 1.5;
+    color: #d0e4f8;
+  }
+
+  .message .typing-cursor {
+    display: inline-block;
+    width: 8px;
+    height: 16px;
+    background: #5b9cf5;
+    margin-left: 2px;
+    animation: blink 0.8s step-end infinite;
+    vertical-align: text-bottom;
+  }
+
+  @keyframes blink {
+    50% { opacity: 0; }
+  }
+
+  .message .options-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 10px;
+  }
+
+  .message .options-row button {
+    background: transparent;
+    border: 1px solid #2a5075;
+    color: #8ab4f8;
+    font-family: inherit;
+    font-size: 13px;
+    padding: 8px 16px;
+    border-radius: 20px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .message .options-row button:hover {
+    background: #1a3a5c;
+    border-color: #5b9cf5;
+    color: #b0ccf8;
+  }
+
+  .sub-agent-row {
+    display: flex;
+    gap: 16px;
+    margin: 10px 0;
+    flex-wrap: wrap;
+  }
+
+  .sub-agent-card {
+    background: rgba(0,0,0,0.25);
+    border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 8px;
+    padding: 12px 16px;
+    text-align: center;
+    min-width: 100px;
+    animation: fadeIn 0.5s ease forwards;
+    opacity: 0;
+    transition: all 0.3s ease;
+  }
+  .sub-agent-card:hover { transform: translateY(-2px); }
+
+  .sub-agent-card .emoji {
+    font-size: 30px;
+    margin-bottom: 4px;
+  }
+  .sub-agent-card .label {
+    font-size: 11px;
+    color: rgba(255,255,255,0.5);
+  }
+  .sub-agent-card .role {
+    font-size: 13px;
+    font-weight: bold;
+  }
+  .card-researcher { border-color: #5b9cf5; }
+  .card-researcher .role { color: #5b9cf5; }
+  .card-explainer { border-color: #22c55e; }
+  .card-explainer .role { color: #22c55e; }
+  .card-quizmaster { border-color: #eab308; }
+  .card-quizmaster .role { color: #eab308; }
+
+  .plan-step {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 6px 0;
+    font-size: 13px;
+    color: #8ab4f8;
+    animation: slideIn 0.3s ease forwards;
+    opacity: 0;
+  }
+
+  .plan-step .num {
+    background: #1a3355;
+    border-radius: 50%;
+    width: 22px;
+    height: 22px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    font-weight: bold;
+    flex-shrink: 0;
+  }
+
+  @keyframes slideIn {
+    from { transform: translateX(-10px); opacity: 0; }
+    to { transform: translateX(0); opacity: 1; }
+  }
+
+  #input-area {
+    padding: 12px 24px 16px;
+    background: #0d1e3d;
+    border-top: 1px solid #1a3355;
+    flex-shrink: 0;
+  }
+
+  #input-row {
+    display: flex;
+    gap: 8px;
+  }
+
+  #input-area input {
+    flex: 1;
+    background: #0a1628;
+    border: 1px solid #1a3355;
+    border-radius: 4px;
+    padding: 10px 14px;
+    color: #e0e8f0;
+    font-family: inherit;
+    font-size: 14px;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+
+  #input-area input:focus {
+    border-color: #5b9cf5;
+  }
+
+  #input-area input::placeholder {
+    color: #3a5a7a;
+  }
+
+  #input-area #send-btn {
+    background: #2a5075;
+    border: none;
+    border-radius: 4px;
+    padding: 10px 20px;
+    color: #e0e8f0;
+    font-family: inherit;
+    font-size: 14px;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+
+  #input-area #send-btn:hover {
+    background: #3a6a95;
+  }
+
+  #options-area {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 10px;
+  }
+
+  #options-area button {
+    background: transparent;
+    border: 1px solid #2a5075;
+    color: #8ab4f8;
+    font-family: inherit;
+    font-size: 13px;
+    padding: 8px 18px;
+    border-radius: 20px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  #options-area button:hover {
+    background: #1a3a5c;
+    border-color: #5b9cf5;
+    color: #b0ccf8;
+  }
+
+  #status-bar {
+    height: 3px;
+    background: #0d1e3d;
+    flex-shrink: 0;
+  }
+
+  #status-bar .progress {
+    height: 100%;
+    background: linear-gradient(90deg, #5b9cf5, #22c55e, #eab308);
+    transition: width 0.5s ease, background 0.6s ease;
+    width: 0%;
+    border-radius: 0 2px 2px 0;
+  }
+
+  .highlight {
+    color: #5b9cf5;
+    font-weight: bold;
+  }
+
+  .highlight-green {
+    color: #5fcb7a;
+  }
+
+  .highlight-yellow {
+    color: #e8c84a;
+  }
+
+  .connection-badge {
+    display: inline-block;
+    background: #0d2a1a;
+    border: 1px solid #2a6a3a;
+    color: #5fcb7a;
+    font-size: 10px;
+    padding: 2px 8px;
+    border-radius: 10px;
+    margin-left: 8px;
+  }
+</style>
+</head>
+<body>
+
+<div id="header">
+  <span class="robot-icon">🤖</span>
+  <span class="robot-name" id="header-name">AI Companion</span>
+  <span class="robot-subtitle">Meta-Agentic Learning Lab <span class="connection-badge">⚡ live</span></span>
+</div>
+
+<div id="status-bar"><div class="progress" id="progress-bar"></div></div>
+
+<div id="chat"></div>
+
+<div id="input-area">
+  <div id="input-row">
+    <input type="text" id="user-input" placeholder="Type your answer..." autofocus>
+    <button id="send-btn">Send</button>
+  </div>
+  <div id="options-area"></div>
+</div>
+
+<script>
+  const chat = document.getElementById('chat');
+  const userInput = document.getElementById('user-input');
+  const sendBtn = document.getElementById('send-btn');
+  const optionsArea = document.getElementById('options-area');
+  const headerName = document.getElementById('header-name');
+  const progressBar = document.getElementById('progress-bar');
+  const robotIcon = document.querySelector('.robot-icon');
+
+  const AGENTS = {
+    default: { name: 'AI Companion', avatar: '🤖', theme: 'default', color: '#5b9cf5' },
+    reactive: { name: 'Reactive Bot', avatar: '⚡', theme: 'reactive', color: '#888888' },
+    memory: { name: 'Memory Agent', avatar: '🧠', theme: 'memory', color: '#a855f7' },
+    skill: { name: 'Skills Coach', avatar: '💪', theme: 'skills', color: '#ec4899' },
+    planning: { name: 'Planning Agent', avatar: '♟️', theme: 'planning', color: '#eab308' },
+    tool: { name: 'Tool Agent', avatar: '🛠️', theme: 'tool', color: '#22c55e' },
+    orchestrator: { name: 'Orchestrator', avatar: '🎼', theme: 'multi', subStyle: 'agent-orchestrator', color: '#a855f7' },
+    researcher: { name: 'Researcher', avatar: '🔍', theme: 'multi', subStyle: 'agent-researcher', color: '#5b9cf5' },
+    explainer: { name: 'Explainer', avatar: '💡', theme: 'multi', subStyle: 'agent-explainer', color: '#22c55e' },
+    quizmaster: { name: 'Quiz Master', avatar: '✍️', theme: 'multi', subStyle: 'agent-quizmaster', color: '#eab308' },
+    hitl: { name: 'Supervisor (HITL)', avatar: '👁️', theme: 'hitl', color: '#ef4444' }
+  };
+
+  let state = {
+    robotName: '',
+    scene: 'welcome',
+    currentAgent: AGENTS.default,
+    memory: {},
+    currentMessageId: null,
+    isWaitingForInput: false,
+    sceneIndex: 0,
+    totalScenes: 15,
+  };
+
+  // ── AGENT MODE SYSTEM ──────────────────────────────────────
+
+  function setAgentMode(agentKey) {
+    const agent = AGENTS[agentKey] || AGENTS.default;
+    state.currentAgent = agent;
+    document.body.className = `mode-${agent.theme}`;
+    headerName.textContent = state.robotName ? `${state.robotName} (${agent.name})` : agent.name;
+    headerName.style.color = agent.color;
+    robotIcon.textContent = agent.avatar;
+    robotIcon.style.transform = 'scale(1.3)';
+    setTimeout(() => { robotIcon.style.transform = 'scale(1)'; }, 300);
+  }
+
+  const scenes = {};
+
+  // ── UI HELPERS ──────────────────────────────────────────────
+
+  function typeMessage(type, text, opts = {}) {
+    return new Promise((resolve) => {
+      const agent = opts.agent || state.currentAgent;
+      const div = document.createElement('div');
+      div.className = `message ${type}`;
+      const bubble = document.createElement('div');
+      bubble.className = 'bubble';
+      if (type === 'bot' && agent.subStyle) bubble.classList.add(agent.subStyle);
+      const cursor = document.createElement('span');
+      cursor.className = 'typing-cursor';
+      bubble.appendChild(cursor);
+
+      if (type === 'bot') {
+        const avatar = document.createElement('span');
+        avatar.className = 'avatar';
+        avatar.textContent = agent.avatar;
+        div.appendChild(avatar);
+      }
+
+      div.appendChild(bubble);
+      chat.appendChild(div);
+
+      let idx = 0;
+      let buffer = '';
+
+      function typeChar() {
+        if (idx < text.length) {
+          buffer += text[idx];
+          // Handle HTML tags — skip past them in one shot so they render properly
+          if (text[idx] === '<') {
+            const end = text.indexOf('>', idx + 1);
+            if (end !== -1) {
+              buffer = text.substring(0, end + 1);
+              idx = end + 1;
+            } else {
+              idx++;
+            }
+          } else {
+            idx++;
+          }
+          bubble.innerHTML = buffer;
+          bubble.appendChild(cursor);
+          chat.scrollTop = chat.scrollHeight;
+          const char = text[idx - 1] || '';
+          const d = char === '.' || char === '!' || char === '?' ? 90 :
+                    char === ',' || char === ';' ? 60 :
+                    char === ' ' ? 25 : 18;
+          setTimeout(typeChar, d);
+        } else {
+          bubble.removeChild(cursor);
+          if (opts.id) state.currentMessageId = opts.id;
+          resolve(bubble);
+        }
+      }
+      typeChar();
+    });
+  }
+
+  function addBotBubble(html, opts = {}) {
+    const agent = opts.agent || state.currentAgent;
+    const div = document.createElement('div');
+    div.className = 'message bot';
+    const avatar = document.createElement('span');
+    avatar.className = 'avatar';
+    avatar.textContent = agent.avatar;
+    div.appendChild(avatar);
+    const bubble = document.createElement('div');
+    bubble.className = 'bubble';
+    if (agent.subStyle) bubble.classList.add(agent.subStyle);
+    bubble.innerHTML = html;
+    div.appendChild(bubble);
+    chat.appendChild(div);
+    chat.scrollTop = chat.scrollHeight;
+    return bubble;
+  }
+
+  function addUserMessage(text) {
+    const div = document.createElement('div');
+    div.className = 'message user';
+    const bubble = document.createElement('div');
+    bubble.className = 'bubble';
+    bubble.textContent = text;
+    div.appendChild(bubble);
+    chat.appendChild(div);
+    chat.scrollTop = chat.scrollHeight;
+  }
+
+  function addOptions(options, callback) {
+    optionsArea.innerHTML = '';
+    options.forEach((opt) => {
+      const btn = document.createElement('button');
+      btn.textContent = opt;
+      btn.addEventListener('click', () => {
+        clearOptions();
+        addUserMessage(opt);
+        callback(opt);
+      });
+      optionsArea.appendChild(btn);
+    });
+  }
+
+  function clearOptions() {
+    optionsArea.innerHTML = '';
+  }
+
+  function showInput(placeholder = 'Type your answer...') {
+    userInput.placeholder = placeholder;
+    userInput.disabled = false;
+    userInput.focus();
+    sendBtn.disabled = false;
+    state.isWaitingForInput = true;
+  }
+
+  function hideInput() {
+    userInput.disabled = true;
+    sendBtn.disabled = true;
+    userInput.placeholder = '';
+    state.isWaitingForInput = false;
+  }
+
+  function handleTextInput(callback) {
+    const handler = () => {
+      const val = userInput.value.trim();
+      if (val && state.isWaitingForInput) {
+        userInput.value = '';
+        hideInput();
+        addUserMessage(val);
+        clearOptions();
+        cleanup();
+        callback(val);
+      }
+    };
+    const keyHandler = (e) => { if (e.key === 'Enter') handler(); };
+    const cleanup = () => {
+      sendBtn.removeEventListener('click', handler);
+      userInput.removeEventListener('keydown', keyHandler);
+    };
+    sendBtn.addEventListener('click', handler);
+    userInput.addEventListener('keydown', keyHandler);
+    showInput();
+    state._inputCleanup = cleanup;
+  }
+
+  function showThinking() {
+    const div = document.createElement('div');
+    div.className = 'message bot';
+    div.id = 'thinking-msg';
+    const avatar = document.createElement('span');
+    avatar.className = 'avatar';
+    avatar.textContent = state.currentAgent.avatar;
+    div.appendChild(avatar);
+    const bubble = document.createElement('div');
+    bubble.className = 'bubble';
+    bubble.innerHTML = '<span style="color:#6a8aaa;">thinking<span id="thinking-anim">.</span></span>';
+    div.appendChild(bubble);
+    chat.appendChild(div);
+    chat.scrollTop = chat.scrollHeight;
+    let dots = 1;
+    state._thinkingInterval = setInterval(() => {
+      const el = document.getElementById('thinking-anim');
+      if (el) { dots = (dots % 4) + 1; el.textContent = '.'.repeat(dots); }
+    }, 350);
+  }
+
+  function hideThinking() {
+    const el = document.getElementById('thinking-msg');
+    if (el) el.remove();
+    if (state._thinkingInterval) clearInterval(state._thinkingInterval);
+  }
+
+  function updateProgress() {
+    const pct = Math.min((state.sceneIndex / state.totalScenes) * 100, 100);
+    progressBar.style.width = pct + '%';
+  }
+
+  function delay(ms) {
+    return new Promise(r => setTimeout(r, ms));
+  }
+
+  // ── API LAYER ───────────────────────────────────────────────
+
+  async function api(endpoint, body) {
+    const resp = await fetch(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({}));
+      throw new Error(err.error || `API error ${resp.status}`);
+    }
+    return resp.json();
+  }
+
+  // ── SCENES ──────────────────────────────────────────────────
+
+  scenes.welcome = async function() {
+    state.sceneIndex = 1;
+    updateProgress();
+    await typeMessage('bot', "Hello! I'm your AI learning companion. What would you like to call me?");
+    handleTextInput((name) => {
+      state.robotName = name || 'Bot';
+      headerName.textContent = state.robotName;
+      scenes.intro();
+    });
+  };
+
+  scenes.intro = async function() {
+    state.sceneIndex = 2;
+    updateProgress();
+    await typeMessage('bot', `${state.robotName} it is! I love it.`);
+    await typeMessage('bot', "I'm here to teach you about <span class='highlight'>Agentic AI</span>. But here's the twist — I'm going to teach you by <em>being</em> the different types of agents as we go. You'll experience each level firsthand.");
+    await typeMessage('bot', 'Ready to jump in?');
+    addOptions(["Let's go!", 'Tell me more about this'], () => scenes.whatIsAgent());
+  };
+
+  scenes.whatIsAgent = async function() {
+    state.sceneIndex = 3;
+    updateProgress();
+    await typeMessage('bot', "First question — what IS an AI agent?");
+    await typeMessage('bot', "An <span class='highlight'>AI agent</span> is a system that can perceive its environment, make decisions, and take actions to achieve a goal — without needing a human to press buttons at every step.");
+    await typeMessage('bot', "But agents come in different levels of sophistication. Let me show you by <span class='highlight-yellow'>becoming each type</span> myself. You'll interact with me in different modes.");
+    await typeMessage('bot', 'Starting with Level 1...');
+    await delay(600);
+    scenes.reactiveDemo();
+  };
+
+  scenes.reactiveDemo = async function() {
+    state.sceneIndex = 4;
+    updateProgress();
+    setAgentMode('reactive');
+    await typeMessage('bot', "I've now become a <span class='highlight'>REACTIVE AGENT</span>. This is the simplest type. I can only respond to specific keywords. <span class='highlight-yellow'>No memory. No reasoning. No context.</span>");
+    await typeMessage('bot', "I can only respond if you say: <span class='highlight'>\"hello\"</span>, <span class='highlight'>\"help\"</span>, or <span class='highlight'>\"bye\"</span>");
+    await typeMessage('bot', "Try talking to me now...");
+
+    let reactiveCount = 0;
+    const rHandler = (text) => {
+      const t = text.toLowerCase().trim();
+      if (t.includes('hello') || t.includes('hi') || t.includes('hey')) {
+        addBotBubble("Hi there! [reactive response triggered by keyword 'hello']");
+      } else if (t.includes('help')) {
+        addBotBubble("I can only respond to: hello, help, or bye. [reactive response]");
+      } else if (t.includes('bye') || t.includes('goodbye')) {
+        addBotBubble("Goodbye! [reactive response triggered by keyword 'bye']");
+      } else {
+        addBotBubble("I don't understand. [unrecognized input] Try saying 'hello', 'help', or 'bye'.");
+      }
+      reactiveCount++;
+      if (reactiveCount >= 3) {
+        cleanup();
+        setTimeout(() => {
+          addBotBubble("...");
+          setTimeout(() => {
+            addBotBubble("Okay, I'm snapping out of reactive mode.");
+            scenes.reactiveReflection();
+          }, 600);
+        }, 400);
+      }
+    };
+
+    showInput();
+    const sendHandler = () => {
+      const val = userInput.value.trim();
+      if (val && state.isWaitingForInput) {
+        userInput.value = '';
+        addUserMessage(val);
+        rHandler(val);
+      }
+    };
+    const keyHandler = (e) => { if (e.key === 'Enter') sendHandler(); };
+    const cleanup = () => {
+      sendBtn.removeEventListener('click', sendHandler);
+      userInput.removeEventListener('keydown', keyHandler);
+    };
+    sendBtn.addEventListener('click', sendHandler);
+    userInput.addEventListener('keydown', keyHandler);
+  };
+
+  scenes.reactiveReflection = async function() {
+    state.sceneIndex = 5;
+    updateProgress();
+    setAgentMode('default');
+    hideInput();
+    clearOptions();
+    await typeMessage('bot', "Annoying, right? <span class='highlight-yellow'>That's a reactive agent.</span>");
+    await typeMessage('bot', "It has <span class='highlight-yellow'>no memory</span> — it forgot everything you said immediately.");
+    await typeMessage('bot', "It has <span class='highlight-yellow'>no reasoning</span> — it just pattern-matches keywords.");
+    await typeMessage('bot', "This is useful for simple automation, but it's <em>not</em> agentic AI.");
+    await typeMessage('bot', 'Ready for Level 2?');
+    addOptions(["Yes, show me memory", "This is already cool"], () => scenes.memoryDemo());
+  };
+
+  scenes.memoryDemo = async function() {
+    state.sceneIndex = 6;
+    updateProgress();
+    setAgentMode('memory');
+    await typeMessage('bot', "Now I'm upgrading to an agent <span class='highlight'>WITH MEMORY</span>. Watch what changes...");
+    await delay(500);
+    await typeMessage('bot', `Hello again! You named me <span class='highlight'>${state.robotName}</span>, remember? And you just went through my reactive mode — the one that couldn't understand you. I remember how frustrating that felt.`);
+    await typeMessage('bot', "See the difference? That's what <span class='highlight'>stateful memory</span> gives an agent — context, continuity, and personalization.");
+
+    await typeMessage('bot', "Memory in AI comes in <span class='highlight'>3 main types</span>. Let me teach each one:");
+    await delay(300);
+    await typeMessage('bot', "<span class='highlight-yellow'>⚡ Short-term Memory</span> — holds current session context. I know I'm teaching you about agents right now. But if we restart, it's gone.");
+    await typeMessage('bot', "<span class='highlight-purple'>📚 Long-term (Semantic) Memory</span> — knowledge stored in vectors or weights. Like knowing what an 'API' or 'Tool' is, without re-learning each time.");
+    await typeMessage('bot', "<span class='highlight-green'>🔄 Episodic Memory</span> — recalling past interactions with <em>you specifically</em>.");
+    await typeMessage('bot', 'Tell me something about <span class="highlight">yourself</span> and I will store it in episodic memory:');
+
+    handleTextInput(async (fact) => {
+      state.memory.userFact = fact;
+      await typeMessage('bot', `<span class="highlight-green">✓ Saved!</span> "<em>${fact}</em>" — This is now part of my episodic memory of you.`);
+      await delay(400);
+      await typeMessage('bot', `Watch — I can recall it: You told me that <span class="highlight">${fact}</span>! That's memory in action.`);
+      await typeMessage('bot', "Without memory, every interaction starts from zero. <span class='highlight'>With it</span>, agents build relationships and context over time.");
+      await typeMessage('bot', 'But memory alone isnt enough for true agentic AI...');
+      addOptions(["What's missing?", "Show me skills", "Show me planning"], (choice) => {
+        if (choice.includes('skills') || choice.includes('Skills')) scenes.skillsDemo();
+        else if (choice.includes('planning') || choice.includes('Planning')) scenes.planningDemo();
+        else scenes.skillsDemo();
+      });
+    });
+  };
+
+  scenes.skillsDemo = async function() {
+    state.sceneIndex = 7;
+    updateProgress();
+    setAgentMode('skill');
+    await typeMessage('bot', "Great question! Let me introduce you to <span class='highlight'>SKILLS</span>.");
+    await typeMessage('bot', "A <span class='highlight'>Skill</span> is a capability an agent has <em>natively</em> — through its training or hard-coded instructions.");
+    await typeMessage('bot', "For example, I can <span class='highlight-green'>summarize</span>, <span class='highlight-yellow'>translate</span>, <span class='highlight-purple'>classify</span>, and <span class='highlight'>generate text</span> — all from my core training.");
+    await typeMessage('bot', "But here's the key: Skills are <span class='highlight-yellow'>static knowledge</span>. I can summarize a paragraph for you, but I can't query a database. <em>For that, I need tools.</em>");
+    await delay(400);
+    await typeMessage('bot', "Let me demonstrate my <span class='highlight'>native skills</span>:");
+    await typeMessage('bot', '<span class="highlight-yellow">→ Skill: Classification</span> — "The sky is blue due to Rayleigh scattering" → <span class="highlight-green">Topic: Science/Physics</span>');
+    await delay(300);
+    await typeMessage('bot', '<span class="highlight-yellow">→ Skill: Summarization</span> — Send me a sentence and I will condense it using my built-in skill:');
+
+    handleTextInput(async (sentence) => {
+      const words = sentence.split(' ');
+      const summary = words.length > 6 ? words.slice(0, 5).join(' ') + '...' : sentence;
+      await typeMessage('bot', `<span class="highlight-green">→ Native Summary Skill:</span> "${summary}" (condensed inherently — no external calls needed)`);
+      await typeMessage('bot', "That's a <span class='highlight'>skill</span> — I did it using patterns from my training data. No API call, no external lookup.");
+      await typeMessage('bot', "Now, what if you need me to <em>do</em> something outside my training? That's where <span class='highlight'>TOOLS</span> come in...");
+      addOptions(["Show me tools!", "Show me planning too"], (choice) => {
+        if (choice.includes('tools') || choice.includes('Tools')) scenes.toolDemo();
+        else scenes.planningDemo();
+      });
+    });
+  };
+
+  scenes.planningDemo = async function() {
+    state.sceneIndex = 8;
+    updateProgress();
+    setAgentMode('planning');
+    await typeMessage('bot', "What's missing is <span class='highlight'>REASONING AND PLANNING</span>.");
+    await typeMessage('bot', "Agentic AI doesn't just remember — it <em>thinks ahead</em>.");
+    await typeMessage('bot', "Give me a real goal or task. I'll use an LLM to decompose it into a plan live.");
+    await typeMessage('bot', '<span class="highlight-yellow">Try it:</span> Type something you actually want to accomplish.');
+
+    handleTextInput(async (task) => {
+      await typeMessage('bot', `<span class="highlight-yellow">"${task}"</span> — decomposing this into a plan now.`);
+      showThinking();
+      try {
+        const data = await api('/api/plan', { task });
+        hideThinking();
+        const steps = data.steps || [];
+        await typeMessage('bot', 'Here is the plan the agent generated:');
+        const bubble = addBotBubble('');
+        for (let i = 0; i < steps.length; i++) {
+          const label = steps[i].replace(/^Step\s*\d+[\.:\)]\s*/i, '').trim();
+          const div = document.createElement('div');
+          div.className = 'plan-step';
+          div.innerHTML = `<span class="num">${i+1}</span> ${label}`;
+          bubble.appendChild(div);
+          await delay(200);
+          chat.scrollTop = chat.scrollHeight;
+        }
+      } catch (err) {
+        hideThinking();
+        await typeMessage('bot', `LLM call failed (${err.message}). Showing a pre-built example:`);
+        const fallback = ['Define learning objectives', 'Create materials', 'Run the session', 'Gather feedback', 'Iterate'];
+        const bubble = addBotBubble('');
+        for (let i = 0; i < fallback.length; i++) {
+          const div = document.createElement('div');
+          div.className = 'plan-step';
+          div.innerHTML = `<span class="num">${i+1}</span> ${fallback[i]}`;
+          bubble.appendChild(div);
+          await delay(200);
+        }
+      }
+      await typeMessage('bot', "That's <span class='highlight'>goal decomposition</span> — breaking a complex goal into executable steps. This separates agentic AI from simple chatbots.");
+      addOptions(["That's powerful!", "What about tools?"], () => scenes.toolDemo());
+    });
+  };
+
+  scenes.toolDemo = async function() {
+    state.sceneIndex = 9;
+    updateProgress();
+    setAgentMode('tool');
+    await typeMessage('bot', "Now let's add <span class='highlight'>TOOL USE</span>. This is what gives agents power beyond conversation.");
+    await typeMessage('bot', "Tools are <span class='highlight-yellow'>external capabilities</span> an agent can invoke — APIs, calculators, databases, search engines, code interpreters.");
+    await typeMessage('bot', "Unlike skills (which are native), tools let agents <span class='highlight'>interact with the real world</span>.");
+    await delay(400);
+    await typeMessage('bot', "Let me show you the difference: try asking me a <span class='highlight'>calculation</span> (like 'what is 15% of 847?') or a <span class='highlight'>data query</span> (like 'what was the population of the US in 2020?')");
+
+    handleTextInput(async (question) => {
+      const q = question.toLowerCase();
+      showThinking();
+      await delay(1200);
+      hideThinking();
+      
+      if (q.includes('weather')) {
+        await typeMessage('bot', '<span class="highlight-green">→ Tool Called: WeatherAPI</span>');
+        await delay(200);
+        await typeMessage('bot', 'I queried an external weather API to get this data. I don\'t "know" the weather — I retrieved it using a tool.');
+      } else if (q.includes('%') || q.includes('calculate') || q.includes('math') || q.includes('*') || q.includes('/') || q.includes('+') || q.includes('-')) {
+        await typeMessage('bot', '<span class="highlight-green">→ Tool Called: Calculator</span>');
+        await delay(200);
+        await typeMessage('bot', 'I used a calculator tool — precise and reliable. No guessing, no hallucination.');
+      } else if (q.includes('population') || q.includes('data') || q.includes('search') || q.includes('find') || q.includes('look up')) {
+        await typeMessage('bot', '<span class="highlight-green">→ Tool Called: Database/Search API</span>');
+        await delay(200);
+        await typeMessage('bot', 'I queried an external knowledge base. My training data is static, but tools give me access to <em>current</em> information.');
+      } else {
+        await typeMessage('bot', '<span class="highlight-green">→ Tool Called: Hybrid (Reasoning + Data Lookup)</span>');
+        await delay(200);
+        await typeMessage('bot', 'I combined reasoning with external data retrieval. This is where agents get <em>useful</em>.');
+      }
+      
+      await typeMessage('bot', "See the <span class='highlight'>pattern</span>? Skills = what I know inherently. Tools = what I can <em>do</em> externally.");
+      await typeMessage('bot', "<span class='highlight'>Memory</span> (what I remember) + <span class='highlight'>Planning</span> (how I reason) + <span class='highlight'>Tools</span> (what I can do) = an agent that actually gets things done.");
+      addOptions(["Show me multi-agent!", "This is amazing"], () => scenes.multiAgent());
+    });
+  };
+
+  scenes.multiAgent = async function() {
+    state.sceneIndex = 10;
+    updateProgress();
+    setAgentMode('orchestrator');
+    await typeMessage('bot', "Now for the really exciting part — <span class='highlight'>MULTI-AGENT SYSTEMS</span>.");
+    await typeMessage('bot', "Watch as I spawn a team of specialized agents, each powered by a real LLM call...");
+    await delay(500);
+
+    const agentDefs = [
+      { emoji: '🔍', role: 'researcher', label: 'Researcher', desc: 'gathers information' },
+      { emoji: '💡', role: 'explainer', label: 'Explainer', desc: 'simplifies concepts' },
+      { emoji: '✍️', role: 'quizmaster', label: 'Quiz Master', desc: 'tests understanding' },
+    ];
+
+    const bubble = addBotBubble('');
+    const row = document.createElement('div');
+    row.className = 'sub-agent-row';
+    agentDefs.forEach((a, i) => {
+      const styles = ['card-researcher', 'card-explainer', 'card-quizmaster'];
+      const card = document.createElement('div');
+      card.className = `sub-agent-card ${styles[i]}`;
+      card.style.animationDelay = `${i * 0.2}s`;
+      card.innerHTML = `<div class="emoji">${a.emoji}</div><div class="role">${a.label}</div><div class="label">${a.desc}</div>`;
+      row.appendChild(card);
+    });
+    bubble.appendChild(row);
+    await delay(800);
+
+    showThinking();
+    try {
+      for (const agent of agentDefs) {
+        const data = await api('/api/multi-agent', { topic: 'What is Agentic AI?', agentRole: agent.role });
+        hideThinking();
+        const agentKey = agent.role === 'researcher' ? 'researcher' : agent.role === 'explainer' ? 'explainer' : 'quizmaster';
+        await typeMessage('bot', `${data.text}`, { agent: AGENTS[agentKey] });
+        if (agent !== agentDefs[agentDefs.length - 1]) showThinking();
+      }
+    } catch (err) {
+      hideThinking();
+      await typeMessage('bot', `Live agent calls encountered an issue (${err.message}). The coordination layer is still active.`, { agent: AGENTS.orchestrator });
+    }
+    hideThinking();
+
+    await typeMessage('bot', "Each agent has a <span class='highlight'>specialized role</span>. They hand off tasks and coordinate — just like a well-functioning team.");
+    await typeMessage('bot', "The <span class='highlight'>Orchestrator</span> coordinates them. Together they accomplish work no single agent could do alone.");
+    addOptions(["Who's in control?", "What about oversight?"], () => scenes.humanInLoop());
+  };
+
+  scenes.humanInLoop = async function() {
+    state.sceneIndex = 11;
+    updateProgress();
+    setAgentMode('hitl');
+    await typeMessage('bot', "Critical question. That's where <span class='highlight'>HUMAN-IN-THE-LOOP</span> comes in.");
+    await typeMessage('bot', "Agentic AI doesn't mean <em>no humans</em>. It means humans become <span class='highlight'>orchestrators, supervisors, and decision-makers</span>.");
+    await typeMessage('bot', "Let me show you what this feels like...");
+    await delay(400);
+
+    showThinking();
+    try {
+      const data = await api('/api/hitl-scenario', {});
+      hideThinking();
+      await typeMessage('bot', "<span class='highlight-yellow'>[HITL MODE]</span> I've encountered a situation I'm not confident about. I need your judgment.");
+      await typeMessage('bot', data.scenario);
+      addOptions(data.options, (choice) => {
+        if (choice.startsWith('A')) {
+          addBotBubble("Proceeding with default. <span class='highlight-yellow'>Note:</span> This carries risk if context shifts. That's why humans stay in the loop.");
+        } else if (choice.startsWith('B')) {
+          addBotBubble("Smart move. Gathering more data before deciding is a key oversight strategy in agentic systems.");
+        } else {
+          addBotBubble("Correct call. Ambiguous decisions need human judgment. Responsible agentic AI knows when to escalate.");
+        }
+        setTimeout(() => scenes.recap(), 800);
+      });
+    } catch (err) {
+      hideThinking();
+      await typeMessage('bot', "I've encountered conflicting signals in the data. Should I proceed, investigate further, or escalate to a human?");
+      addOptions(['A) Proceed with default', 'B) Request more data', 'C) Escalate to human'], (choice) => {
+        addBotBubble("That's the human-in-the-loop principle in action.");
+        setTimeout(() => scenes.recap(), 800);
+      });
+    }
+  };
+
+  scenes.recap = async function() {
+    state.sceneIndex = 12;
+    updateProgress();
+    hideInput();
+    clearOptions();
+    await typeMessage('bot', "Let's recap the <span class='highlight'>spectrum of agentic AI</span> you just experienced firsthand:");
+    await delay(400);
+    const levels = [
+      { level: '1. Reactive Agent', desc: 'Keyword matching, no memory, no reasoning', emoji: '⚡' },
+      { level: '2. Memory Agent', desc: 'Short-term, long-term & episodic recall', emoji: '🧠' },
+      { level: '3. Skills', desc: 'Native capabilities — summarization, classification, generation', emoji: '💪' },
+      { level: '4. Planning Agent', desc: 'Goal decomposition & reasoning about steps', emoji: '♟️' },
+      { level: '5. Tool-Using Agent', desc: 'APIs, calculators, databases, real-world action', emoji: '🛠️' },
+      { level: '6. Multi-Agent System', desc: 'Specialized agents collaborating via orchestrator', emoji: '🎼' },
+      { level: '7. Human-in-the-Loop', desc: 'Humans supervise, escalate, and decide', emoji: '👁️' },
+    ];
+    const bubble = addBotBubble('');
+    levels.forEach((l) => {
+      const div = document.createElement('div');
+      div.style.cssText = 'margin: 6px 0; font-size: 13px;';
+      div.innerHTML = `${l.emoji} <span class="highlight">${l.level}</span> — ${l.desc}`;
+      bubble.appendChild(div);
+    });
+    await delay(500);
+    await typeMessage('bot', "And YOU just experienced every single one through our conversation. <span class='highlight'>That's meta-agentic learning!</span> The medium is the message.");
+    addOptions(["Let me design my own agent!", "That was incredible"], () => scenes.capstone());
+  };
+
+  scenes.capstone = async function() {
+    state.sceneIndex = 13;
+    updateProgress();
+    hideInput();
+    clearOptions();
+    await typeMessage('bot', "Now it's YOUR turn. Let's design an agent together.");
+    await typeMessage('bot', "Think of a task you'd want an AI agent to handle — grading quizzes, answering parent emails, organizing lesson plans.");
+    await typeMessage('bot', "Describe it and I'll use an LLM to analyze the architecture.");
+    handleTextInput((task) => {
+      state.memory.userTask = task;
+      setTimeout(() => scenes.designAgent(task), 300);
+    });
+  };
+
+  scenes.designAgent = async function(task) {
+    state.sceneIndex = 14;
+    updateProgress();
+    await typeMessage('bot', `Great task: <span class="highlight-yellow">"${task}"</span>`);
+    await typeMessage('bot', "Let me analyze this through an LLM...");
+    await delay(300);
+    showThinking();
+    try {
+      const data = await api('/api/design-agent', { task });
+      hideThinking();
+      await typeMessage('bot', 'Here is the architectural analysis:');
+      const bubble = addBotBubble('');
+      const lines = data.design.split('\n').filter(l => l.trim());
+      for (const line of lines) {
+        const div = document.createElement('div');
+        div.style.cssText = 'margin: 6px 0; padding: 4px 0; font-size: 13px;';
+        div.innerHTML = line;
+        bubble.appendChild(div);
+        await delay(300);
+        chat.scrollTop = chat.scrollHeight;
+      }
+    } catch (err) {
+      hideThinking();
+      await typeMessage('bot', `LLM analysis unavailable (${err.message}). Key considerations for "${task}": data needs, tool integration, human oversight points, memory structure.`);
+    }
+    await typeMessage('bot', "<span class='highlight'>You just thought like an AI architect.</span>");
+    addOptions(["I get it now!", "This changes how I see AI"], () => scenes.final());
+  };
+
+  scenes.final = async function() {
+    state.sceneIndex = 15;
+    updateProgress();
+    hideInput();
+    clearOptions();
+    await typeMessage('bot', "Here's what you learned today:");
+    await delay(300);
+    const insights = [
+      "Agentic AI is built from layers: memory, planning, tools, coordination",
+      "The shift is from <em>assistants you command</em> to <em>agents you orchestrate</em>",
+      "Humans become supervisors, designers, and decision-makers",
+      "You experienced every level through the very interface teaching you. That's meta.",
+    ];
+    for (const ins of insights) {
+      await typeMessage('bot', `→ ${ins}`);
+    }
+    await delay(400);
+    await typeMessage('bot', `Thanks for learning with me, <span class="highlight">${state.robotName}</span>. Now go build something agentic. 🚀`);
+    addOptions(['Run it again!', 'Share this with a friend'], (choice) => {
+      if (choice.includes('Run')) resetApp();
+    });
+  };
+
+  // ── LIFECYCLE ───────────────────────────────────────────────
+
+  function resetApp() {
+    chat.innerHTML = '';
+    clearOptions();
+    hideInput();
+    if (state._inputCleanup) state._inputCleanup();
+    if (state._thinkingInterval) clearInterval(state._thinkingInterval);
+    state = {
+      robotName: '', scene: 'welcome', currentAgent: AGENTS.default,
+      memory: {},
+      currentMessageId: null, isWaitingForInput: false,
+      sceneIndex: 0, totalScenes: 15,
+    };
+    document.body.className = 'mode-default';
+    headerName.textContent = 'AI Companion';
+    headerName.style.color = AGENTS.default.color;
+    robotIcon.textContent = AGENTS.default.avatar;
+    progressBar.style.width = '0%';
+    scenes.welcome();
+  }
+
+  scenes.welcome();
+</script>
+
+</body>
+</html>
